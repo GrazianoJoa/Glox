@@ -1,6 +1,9 @@
 package scan
 
-import "fmt"
+import (
+	"fmt"
+	"strconv"
+)
 
 type Scanner struct {
 	source string
@@ -42,16 +45,84 @@ func (scan *Scanner) match(expected byte) bool {
 }
 
 func (scan Scanner) peek() byte {
-	if !scan.isAtEnd() {
-		return 0
+	if scan.isAtEnd() {
+		return '\000'
 	}
 
 	return scan.source[scan.current]
 }
 
+func (scan Scanner) isDigit(c byte) bool {
+	return c >= '0' && c <= '9'
+}
+
+func (scan Scanner) isAlpha(c byte) bool {
+	return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z')
+}
+
+func (scan *Scanner) peekNext() byte {
+	if scan.current + 1 >= len(scan.source) {
+		return '\000'
+	}
+	return scan.source[scan.current+1]
+}
+
+func (scan *Scanner) number() error {
+	for scan.isDigit(scan.peek()) {
+		scan.advance()
+	}
+
+	if scan.peek() == '.' && scan.isDigit(scan.peekNext()) {
+		scan.advance()
+	}
+
+	for scan.isDigit(scan.peek()) {
+		scan.advance()
+	}
+
+	value, err := strconv.ParseFloat(scan.source[scan.start:scan.current], 64)
+	if err != nil {
+		return fmt.Errorf("ERROR")
+	}
+
+	scan.addToken(TypeNumber, value)
+	return nil
+}
+
+func (scan Scanner) isAlphaNumeric(c byte) bool {
+	return scan.isDigit(c) || scan.isAlpha(c)
+}
+
+func (scan *Scanner) identifier() error {
+	for scan.isAlphaNumeric(scan.peek()) {
+		scan.advance()
+	}
+
+	scan.addToken(TypeIdentifier, "")
+	return nil
+}
+
 func (scan *Scanner) addToken(tokentype TokenType, literal any) {
 	text := scan.source[scan.start:scan.current]
 	scan.tokenList = append(scan.tokenList, NewToken(tokentype, text, literal, scan.line))
+}
+
+func (scan *Scanner) string() error {
+	for scan.peek() != '"' && !scan.isAtEnd() {
+		if scan.peek() == '\n' {
+			scan.line++
+		}
+		scan.advance()
+	}
+
+	if scan.isAtEnd() {
+		return fmt.Errorf("Unclosed string in line %d", scan.line)
+	}
+
+	scan.advance()
+
+	scan.addToken(TypeString, scan.source[scan.start+1:scan.current-1])
+	return nil
 }
 
 func (scan *Scanner) ScanTokens() ([]*Token, error) {
@@ -96,9 +167,11 @@ func (scan *Scanner) scanToken() error {
 				c := scan.advance()
 				if c == '/' && scan.peek() == '*' {
 					depth++
+					scan.advance()
 				}
 				if c == '*' && scan.peek() == '/' {
 					depth--
+					scan.advance()
 				}
 			}
 			if depth != 0 {
@@ -113,12 +186,27 @@ func (scan *Scanner) scanToken() error {
 		scan.addToken(TypeDot, nil)
 	case ';':
 		scan.addToken(TypeSemicolon, nil)
-	
+
+	case '"': 
+		return scan.string()
+
+	case ' ':
+		break
+	case '\t':
+		break
+	case '\r':
+		break
 	case '\n':
 		scan.line++
 
 	default:
-		return fmt.Errorf("Unrecognized lexeme %c in line %d", c, scan.line)
+		if scan.isDigit(c) {
+			return scan.number()
+		} else if scan.isAlpha(c) {
+			return scan.identifier()
+		} else {
+			return fmt.Errorf("Unrecognized token %c in line %d\n", c, scan.line)
+		}
 	}
 	return nil
 }
