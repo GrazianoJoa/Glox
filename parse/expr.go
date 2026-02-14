@@ -2,6 +2,7 @@ package parse
 
 import (
 	"fmt"
+	"strings"
 	"github.com/GrazianoJoa/Glox/scan"
 )
 
@@ -24,27 +25,42 @@ type Visitor interface {
 type VisitorPrint struct {}
 
 func (p *VisitorPrint) VisitLiteral(l *Literal) any {
-	return fmt.Sprintf("%v", l.value)
+	if l.value == nil { 
+		return "nil"
+	}
+	return l.value
 }
 
 func (p *VisitorPrint) VisitUnary(u *Unary) any {
-	return fmt.Sprintf("")
+	return p.parenthesize(u.operator.Lexeme, u.right)
 }
 
 func (p *VisitorPrint) VisitBinary(b *Binary) any {
-	return ""
+	return p.parenthesize(b.operator.Lexeme, b.right, b.left)
 }
 
 func (p *VisitorPrint) VisitGrouping(g *Grouping) any {
-	return ""
+	return p.parenthesize("grouping", g.expr)
+}
+
+func (p *VisitorPrint) parenthesize(name string, exprs... Expr) string {
+	var b strings.Builder
+	b.WriteString("(")
+	for _, expr := range exprs {
+		b.WriteString(" ")
+		e := expr.Accept(p)
+		b.WriteString(fmt.Sprint(e))
+	}
+	b.WriteString(")")
+	return b.String()
 }
  
 // Binary
 
 type Binary struct {
-	left *Expr
+	left Expr
 	operator *scan.Token
-	right *Expr
+	right Expr
 }
 
 func (b *Binary) Accept(v Visitor) any {
@@ -54,7 +70,7 @@ func (b *Binary) Accept(v Visitor) any {
 // Grouping
 
 type Grouping struct {
-	expr *Expr
+	expr Expr
 }
 
 func (g *Grouping) Accept(v Visitor) any {
@@ -74,7 +90,7 @@ func (l *Literal) Accept(v Visitor) any {
 // Unary
 
 type Unary struct {
-	right *Expr
+	right Expr
 	operator *scan.Token
 }
 
@@ -82,9 +98,3 @@ func (u *Unary) Accept(v Visitor) any {
 	return v.VisitUnary(u)
 }
 
-func main() {
-	expr := &Literal{value: 45}
-	printer := &VisitorPrint{}
-	res := expr.Accept(printer)
-	fmt.Println(res)
-}
