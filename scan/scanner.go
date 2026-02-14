@@ -21,191 +21,187 @@ func NewScanner(source string) *Scanner {
 	}
 }
 
-func (scan Scanner) isAtEnd() bool {
-	return scan.current >= len(scan.source)
+func (s *Scanner) isAtEnd() bool {
+	return s.current >= len(s.source)
 }
 
-func (scan *Scanner) advance() byte {
-	c := scan.source[scan.current]
-	scan.current++
+func (s *Scanner) advance() byte {
+	c := s.source[s.current]
+	s.current++
 	return c
 }
 
-func (scan *Scanner) match(expected byte) bool {
-	if scan.isAtEnd() { 
+func (s *Scanner) match(expected byte) bool {
+	if s.isAtEnd() { 
 		return false
 	}
 
-	if scan.source[scan.current] != expected { 
+	if s.source[s.current] != expected { 
 		return false
 	}
 
-	scan.current++
+	s.current++
 	return true
 }
 
-func (scan Scanner) peek() byte {
-	if scan.isAtEnd() {
+func (s *Scanner) peek() byte {
+	if s.isAtEnd() {
 		return '\000'
 	}
 
-	return scan.source[scan.current]
+	return s.source[s.current]
 }
 
-func (scan Scanner) isDigit(c byte) bool {
+func (s *Scanner) isDigit(c byte) bool {
 	return c >= '0' && c <= '9'
 }
 
-func (scan Scanner) isAlpha(c byte) bool {
+func (s *Scanner) isAlpha(c byte) bool {
 	return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z')
 }
 
-func (scan *Scanner) peekNext() byte {
-	if scan.current + 1 >= len(scan.source) {
+func (s *Scanner) peekNext() byte {
+	if s.current + 1 >= len(s.source) {
 		return '\000'
 	}
-	return scan.source[scan.current+1]
+	return s.source[s.current+1]
 }
 
-func (scan *Scanner) number() error {
-	for scan.isDigit(scan.peek()) {
-		scan.advance()
+func (s *Scanner) number() error {
+	for s.isDigit(s.peek()) {
+		s.advance()
 	}
 
-	if scan.peek() == '.' && scan.isDigit(scan.peekNext()) {
-		scan.advance()
+	if s.peek() == '.' && s.isDigit(s.peekNext()) {
+		s.advance()
 	}
 
-	for scan.isDigit(scan.peek()) {
-		scan.advance()
+	for s.isDigit(s.peek()) {
+		s.advance()
 	}
 
-	value, err := strconv.ParseFloat(scan.source[scan.start:scan.current], 64)
+	value, err := strconv.ParseFloat(s.source[s.start:s.current], 64)
 	if err != nil {
-		return fmt.Errorf("ERROR")
+		return fmt.Errorf("invalid number at line %d: %w", s.line, err)
 	}
 
-	scan.addToken(TypeNumber, value)
+	s.addToken(TypeNumber, value)
 	return nil
 }
 
-func (scan Scanner) isAlphaNumeric(c byte) bool {
-	return scan.isDigit(c) || scan.isAlpha(c)
+func (s *Scanner) isAlphaNumeric(c byte) bool {
+	return s.isDigit(c) || s.isAlpha(c)
 }
 
-func (scan *Scanner) identifier() error {
-	for scan.isAlphaNumeric(scan.peek()) {
-		scan.advance()
+func (s *Scanner) identifier() error {
+	for s.isAlphaNumeric(s.peek()) {
+		s.advance()
 	}
 
-	scan.addToken(TypeIdentifier, "")
+	s.addToken(TypeIdentifier, "")
 	return nil
 }
 
-func (scan *Scanner) addToken(tokentype TokenType, literal any) {
-	text := scan.source[scan.start:scan.current]
-	scan.tokenList = append(scan.tokenList, NewToken(tokentype, text, literal, scan.line))
+func (s *Scanner) addToken(tokentype TokenType, literal any) {
+	text := s.source[s.start:s.current]
+	s.tokenList = append(s.tokenList, NewToken(tokentype, text, literal, s.line))
 }
 
-func (scan *Scanner) string() error {
-	for scan.peek() != '"' && !scan.isAtEnd() {
-		if scan.peek() == '\n' {
-			scan.line++
+func (s *Scanner) scanString() error {
+	for s.peek() != '"' && !s.isAtEnd() {
+		if s.peek() == '\n' {
+			s.line++
 		}
-		scan.advance()
+		s.advance()
 	}
 
-	if scan.isAtEnd() {
-		return fmt.Errorf("Unclosed string in line %d", scan.line)
+	if s.isAtEnd() {
+		return fmt.Errorf("unclosed string in line %d", s.line)
 	}
 
-	scan.advance()
+	s.advance()
 
-	scan.addToken(TypeString, scan.source[scan.start+1:scan.current-1])
+	s.addToken(TypeString, s.source[s.start+1:s.current-1])
 	return nil
 }
 
-func (scan *Scanner) ScanTokens() ([]*Token, error) {
-	for !scan.isAtEnd() {
-		scan.start = scan.current
-		err := scan.scanToken()
+func (s *Scanner) ScanTokens() ([]*Token, error) {
+	for !s.isAtEnd() {
+		s.start = s.current
+		err := s.scanToken()
 		if err != nil {
 			return nil, err
 		}
 	}
 
-	scan.tokenList = append(scan.tokenList, NewToken(TypeEOF, "", nil, scan.line))
-	return scan.tokenList, nil
+	s.tokenList = append(s.tokenList, NewToken(TypeEOF, "", nil, s.line))
+	return s.tokenList, nil
 }
 
-func (scan *Scanner) scanToken() error {
-	c := scan.advance()
+func (s *Scanner) scanToken() error {
+	c := s.advance()
 	switch c {
 	// Single-character 
 	case '(':
-		scan.addToken(TypeLeftParen, nil)
+		s.addToken(TypeLeftParen, nil)
 	case ')':
-		scan.addToken(TypeRightParen, nil)
+		s.addToken(TypeRightParen, nil)
 	case '{':
-		scan.addToken(TypeLeftBrace, nil)
+		s.addToken(TypeLeftBrace, nil)
 	case '}':
-		scan.addToken(TypeRightBrace, nil)
+		s.addToken(TypeRightBrace, nil)
 	case '+':
-		scan.addToken(TypePlus, nil)
+		s.addToken(TypePlus, nil)
 	case '-':
-		scan.addToken(TypeMinus, nil)
+		s.addToken(TypeMinus, nil)
 	case '*':
-		scan.addToken(TypeStar, nil)
+		s.addToken(TypeStar, nil)
 	case '/':
-		if scan.match('/') {
-			for !scan.isAtEnd() && scan.peek() != '\n' {
-				scan.advance()
+		if s.match('/') {
+			for !s.isAtEnd() && s.peek() != '\n' {
+				s.advance()
 			}
-		} else if scan.match('*') {
+		} else if s.match('*') {
 			depth := 1
-			for !scan.isAtEnd() && depth != 0 {
-				c := scan.advance()
-				if c == '/' && scan.peek() == '*' {
+			for !s.isAtEnd() && depth != 0 {
+				c := s.advance()
+				if c == '/' && s.peek() == '*' {
 					depth++
-					scan.advance()
+					s.advance()
 				}
-				if c == '*' && scan.peek() == '/' {
+				if c == '*' && s.peek() == '/' {
 					depth--
-					scan.advance()
+					s.advance()
 				}
 			}
 			if depth != 0 {
-				return fmt.Errorf("Unclosed comment in line: %d", scan.line)
+				return fmt.Errorf("unclosed comment in line: %d", s.line)
 			}
 		} else {
-			scan.addToken(TypeSlash, nil)
+			s.addToken(TypeSlash, nil)
 		}
 	case ',':
-		scan.addToken(TypeComma, nil)
+		s.addToken(TypeComma, nil)
 	case '.':
-		scan.addToken(TypeDot, nil)
+		s.addToken(TypeDot, nil)
 	case ';':
-		scan.addToken(TypeSemicolon, nil)
+		s.addToken(TypeSemicolon, nil)
 
 	case '"': 
-		return scan.string()
+		return s.scanString()
 
-	case ' ':
-		break
-	case '\t':
-		break
-	case '\r':
-		break
+	case ' ', '\t', '\r':
+
 	case '\n':
-		scan.line++
+		s.line++
 
 	default:
-		if scan.isDigit(c) {
-			return scan.number()
-		} else if scan.isAlpha(c) {
-			return scan.identifier()
+		if s.isDigit(c) {
+			return s.number()
+		} else if s.isAlpha(c) {
+			return s.identifier()
 		} else {
-			return fmt.Errorf("Unrecognized token %c in line %d\n", c, scan.line)
+			return fmt.Errorf("unrecognized token %c in line %d\n", c, s.line)
 		}
 	}
 	return nil
